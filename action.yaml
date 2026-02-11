@@ -1,0 +1,114 @@
+name: 'Trigger Deploy Workflow'
+description: 'Triggers deploy workflow based on detected changes (build, k8s, CloudFormation, config)'
+
+inputs:
+  build_container:
+    description: 'Whether container was built (true/false)'
+    required: true
+  k8s_changed:
+    description: 'Whether k8s files changed (true/false)'
+    required: true
+  cf_changed:
+    description: 'Whether CloudFormation changed (true/false)'
+    required: true
+  config_changed_non_prod:
+    description: 'Whether non-prod ConfigMap/Secret changed (true/false)'
+    required: true
+  config_changed_prod:
+    description: 'Whether prod ConfigMap/Secret changed (true/false)'
+    required: true
+  tag:
+    description: 'Image tag to deploy'
+    required: true
+  deploy_workflow:
+    description: 'Deploy workflow file name'
+    required: false
+    default: 'deploy.yaml'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Trigger deploy workflow
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        BUILD_CHANGED="${{ inputs.build_container }}"
+        K8S_CHANGED="${{ inputs.k8s_changed }}"
+        CF_CHANGED="${{ inputs.cf_changed }}"
+        CONFIG_CHANGED_NON_PROD="${{ inputs.config_changed_non_prod }}"
+        CONFIG_CHANGED_PROD="${{ inputs.config_changed_prod }}"
+        TAG="${{ inputs.tag }}"
+        DEPLOY_WORKFLOW="${{ inputs.deploy_workflow }}"
+
+        echo "=== Trigger Deploy ==="
+        echo "Build changed: $BUILD_CHANGED"
+        echo "K8s changed: $K8S_CHANGED"
+        echo "CF changed: $CF_CHANGED"
+        echo "Config changed (non-prod): $CONFIG_CHANGED_NON_PROD"
+        echo "Config changed (prod): $CONFIG_CHANGED_PROD"
+        echo "Tag: $TAG"
+        echo ""
+
+        # Track what we're triggering
+        TRIGGERED_NON_PROD=""
+        TRIGGERED_PROD=""
+
+        if [[ "$BUILD_CHANGED" == "true" ]]; then
+          # App code changed - full deploy with new image
+          echo "Triggering non-prod deploy with new image tag: $TAG"
+          gh workflow run "$DEPLOY_WORKFLOW" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}" \
+            --field tag="$TAG" \
+            --field environment=non-prod
+          TRIGGERED_NON_PROD="full deploy (new image)"
+
+        elif [[ "$K8S_CHANGED" == "true" || "$CF_CHANGED" == "true" ]]; then
+          # K8s or CF only - skip image update
+          SKIP_CF="true"
+          [[ "$CF_CHANGED" == "true" ]] && SKIP_CF="false"
+
+          echo "Triggering non-prod deploy (k8s/cf changes only)"
+          echo "  skip-cloudformation: $SKIP_CF"
+          echo "  restart-pods: $CONFIG_CHANGED_NON_PROD"
+
+          gh workflow run "$DEPLOY_WORKFLOW" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}" \
+            --field environment=non-prod \
+            --field skip-image-update=true \
+            --field skip-cloudformation="$SKIP_CF" \
+            --field restart-pods="$CONFIG_CHANGED_NON_PROD"
+          TRIGGERED_NON_PROD="k8s/cf only (restart-pods=$CONFIG_CHANGED_NON_PROD)"
+        fi
+
+        # Prod config changes - trigger pod restart in prod (independent of above)
+        if [[ "$CONFIG_CHANGED_PROD" == "true" ]]; then
+          echo "Triggering prod pod restart (config changed)"
+          gh workflow run "$DEPLOY_WORKFLOW" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref }}" \
+            --field environment=prod \
+            --field skip-image-update=true \
+            --field skip-cloudformation=true \
+            --field restart-pods=true
+          TRIGGERED_PROD="config restart"
+        fi
+
+        # Summary
+        echo ""
+        echo "=== Summary ==="
+        if [[ -n "$TRIGGERED_NON_PROD" ]]; then
+          echo "Non-prod: $TRIGGERED_NON_PROD"
+        else
+          echo "Non-prod: no deploy triggered"
+        fi
+        if [[ -n "$TRIGGERED_PROD" ]]; then
+          echo "Prod: $TRIGGERED_PROD"
+        else
+          echo "Prod: no deploy triggered"
+        fi
+        echo "==============="
