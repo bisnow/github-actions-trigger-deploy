@@ -20,10 +20,6 @@ inputs:
   tag:
     description: 'Image tag to deploy'
     required: true
-  deploy_workflow:
-    description: 'Deploy workflow file name'
-    required: false
-    default: 'deploy.yaml'
 
 runs:
   using: 'composite'
@@ -41,7 +37,11 @@ runs:
         CONFIG_CHANGED_NON_PROD="${{ inputs.config_changed_non_prod }}"
         CONFIG_CHANGED_PROD="${{ inputs.config_changed_prod }}"
         TAG="${{ inputs.tag }}"
-        DEPLOY_WORKFLOW="${{ inputs.deploy_workflow }}"
+
+        # Find deploy workflow (deploy.yaml or deploy.yml)
+        for DEPLOY_WORKFLOW in deploy.yaml deploy.yml; do
+          gh workflow view "$DEPLOY_WORKFLOW" --repo "${{ github.repository }}" &>/dev/null && break
+        done
 
         echo "=== Trigger Deploy ==="
         echo "Build changed: $BUILD_CHANGED"
