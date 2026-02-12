@@ -57,14 +57,20 @@ runs:
         TRIGGERED_PROD=""
 
         if [[ "$BUILD_CHANGED" == "true" ]]; then
-          # App code changed - full deploy with new image
+          # App code changed - deploy new image, only include CF if it changed
+          SKIP_CF="true"
+          [[ "$CF_CHANGED" == "true" ]] && SKIP_CF="false"
+
           echo "Triggering non-prod deploy with new image tag: $TAG"
+          echo "  skip-cloudformation: $SKIP_CF"
           gh workflow run "$DEPLOY_WORKFLOW" \
             --repo "${{ github.repository }}" \
             --ref "${{ github.ref }}" \
             --field tag="$TAG" \
-            --field environment=non-prod
-          TRIGGERED_NON_PROD="full deploy (new image)"
+            --field environment=non-prod \
+            --field skip-cloudformation="$SKIP_CF" \
+            --field restart-pods="$CONFIG_CHANGED_NON_PROD"
+          TRIGGERED_NON_PROD="deploy new image (skip-cf=$SKIP_CF)"
 
         elif [[ "$K8S_CHANGED" == "true" || "$CF_CHANGED" == "true" ]]; then
           # K8s or CF only - skip image update
