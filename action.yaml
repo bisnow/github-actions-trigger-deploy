@@ -111,19 +111,6 @@ runs:
           TRIGGERED_NON_PROD="k8s/cf only (restart-pods=$CONFIG_CHANGED_NON_PROD)"
         fi
 
-        # Prod config changes - trigger pod restart in prod (independent of above)
-        if [[ "$CONFIG_CHANGED_PROD" == "true" ]]; then
-          echo "Triggering prod pod restart (config changed)"
-          gh workflow run "$DEPLOY_WORKFLOW" \
-            --repo "${{ github.repository }}" \
-            --ref "${{ github.ref }}" \
-            --field environment=prod \
-            --field skip-image-update=true \
-            --field skip-cloudformation=true \
-            --field restart-pods=true
-          TRIGGERED_PROD="config restart"
-        fi
-
         # Summary
         echo ""
         echo "=== Summary ==="
