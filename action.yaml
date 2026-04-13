@@ -20,6 +20,10 @@ inputs:
   tag:
     description: 'Image tag to deploy'
     required: true
+  deploy_workflow:
+    description: 'Override the deploy workflow filename (e.g. my-deploy.yml). Auto-detected if not set.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -38,10 +42,26 @@ runs:
         CONFIG_CHANGED_PROD="${{ inputs.config_changed_prod }}"
         TAG="${{ inputs.tag }}"
 
-        # Find deploy workflow (deploy.yaml or deploy.yml)
-        for DEPLOY_WORKFLOW in deploy.yaml deploy.yml; do
-          gh workflow view "$DEPLOY_WORKFLOW" --repo "${{ github.repository }}" &>/dev/null && break
-        done
+        # Find deploy workflow — use override if provided, otherwise auto-detect
+        # Uses file existence check (not `gh workflow view`) to avoid matching
+        # deleted workflows that still exist in GitHub's history.
+        if [[ -n "${{ inputs.deploy_workflow }}" ]]; then
+          DEPLOY_WORKFLOW="${{ inputs.deploy_workflow }}"
+          echo "Using deploy workflow (override): $DEPLOY_WORKFLOW"
+        else
+          DEPLOY_WORKFLOW=""
+          for candidate in deploy.yml deploy.yaml; do
+            if gh api "repos/${{ github.repository }}/contents/.github/workflows/${candidate}" &>/dev/null; then
+              DEPLOY_WORKFLOW="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$DEPLOY_WORKFLOW" ]]; then
+            echo "ERROR: No deploy workflow found (.github/workflows/deploy.yml or deploy.yaml)"
+            exit 1
+          fi
+          echo "Using deploy workflow (auto-detected): $DEPLOY_WORKFLOW"
+        fi
 
         echo "=== Trigger Deploy ==="
         echo "Build changed: $BUILD_CHANGED"
