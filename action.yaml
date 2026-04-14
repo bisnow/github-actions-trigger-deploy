@@ -16,7 +16,7 @@ inputs:
     required: true
   config_changed_prod:
     description: 'Whether prod ConfigMap/Secret changed (true/false)'
-    required: true
+    required: false
   tag:
     description: 'Image tag to deploy'
     required: true
