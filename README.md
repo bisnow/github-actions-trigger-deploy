@@ -1,6 +1,6 @@
 # Trigger Deploy Action
 
-Triggers the deploy workflow based on detected changes. Handles the logic for determining what type of deploy to trigger (full deploy, k8s-only, config restart) for both non-prod and prod environments.
+Triggers the deploy workflow based on detected changes. Handles the logic for determining what type of deploy to trigger (full deploy, k8s-only, config restart) for non-prod environments.
 
 ## Usage
 
@@ -12,7 +12,6 @@ Triggers the deploy workflow based on detected changes. Handles the logic for de
     k8s_changed: ${{ needs.check-changes.outputs.k8s_changed }}
     cf_changed: ${{ needs.check-changes.outputs.cf_changed }}
     config_changed_non_prod: ${{ needs.check-changes.outputs.config_changed_non_prod }}
-    config_changed_prod: ${{ needs.check-changes.outputs.config_changed_prod }}
     tag: ${{ env.TAG }}
 ```
 
@@ -24,9 +23,11 @@ Triggers the deploy workflow based on detected changes. Handles the logic for de
 | `k8s_changed` | Whether k8s files changed (true/false) | Yes | - |
 | `cf_changed` | Whether CloudFormation changed (true/false) | Yes | - |
 | `config_changed_non_prod` | Whether non-prod ConfigMap/Secret changed (true/false) | Yes | - |
-| `config_changed_prod` | Whether prod ConfigMap/Secret changed (true/false) | Yes | - |
 | `tag` | Image tag to deploy | Yes | - |
 | `deploy_workflow` | Deploy workflow file name | No | `deploy.yaml` |
+| ~~`config_changed_prod`~~ | ~~Whether prod ConfigMap/Secret changed (true/false)~~ | ~~No~~ | ~~Deprecated~~ |
+
+> **Deprecated:** `config_changed_prod` was removed. Prod pod restarts are no longer triggered automatically by this action. If passed, the input is silently ignored.
 
 ## Behavior
 
@@ -40,23 +41,13 @@ The action evaluates the change detection outputs and triggers the appropriate d
 | `k8s_changed=true` or `cf_changed=true` | K8s/CF-only deploy, skips image update |
 | `config_changed_non_prod=true` | Adds `restart-pods=true` to pick up config changes |
 
-### Prod Deployments
-
-| Condition | Action |
-|-----------|--------|
-| `config_changed_prod=true` | Triggers pod restart to pick up config changes |
-
-**Note:** Prod deployments are only triggered for config changes. Full prod deploys (with new images) should be done manually.
-
 ## Deploy Matrix
 
-| Change Type | Non-prod | Prod |
-|-------------|----------|------|
-| App code only | New image deployed | No action |
-| K8s manifests (non-prod) | K8s sync, no restart | No action |
-| ConfigMap/Secret (non-prod) | K8s sync + pod restart | No action |
-| ConfigMap/Secret (prod) | No action | Pod restart |
-| App code + prod config | New image to non-prod | Pod restart |
+| Change Type | Non-prod |
+|-------------|----------|
+| App code only | New image deployed |
+| K8s manifests | K8s sync, no restart |
+| ConfigMap/Secret | K8s sync + pod restart |
 
 ## Requirements
 
@@ -91,7 +82,6 @@ jobs:
       k8s_changed: ${{ steps.check.outputs.k8s_changed }}
       cf_changed: ${{ steps.check.outputs.cf_changed }}
       config_changed_non_prod: ${{ steps.check.outputs.config_changed_non_prod }}
-      config_changed_prod: ${{ steps.check.outputs.config_changed_prod }}
     steps:
       - name: Check for changes
         id: check
@@ -114,7 +104,6 @@ jobs:
           k8s_changed: ${{ needs.check-changes.outputs.k8s_changed }}
           cf_changed: ${{ needs.check-changes.outputs.cf_changed }}
           config_changed_non_prod: ${{ needs.check-changes.outputs.config_changed_non_prod }}
-          config_changed_prod: ${{ needs.check-changes.outputs.config_changed_prod }}
           tag: rc-${{ github.run_number }}
 ```
 

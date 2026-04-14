@@ -14,9 +14,6 @@ inputs:
   config_changed_non_prod:
     description: 'Whether non-prod ConfigMap/Secret changed (true/false)'
     required: true
-  config_changed_prod:
-    description: 'Whether prod ConfigMap/Secret changed (true/false)'
-    required: false
   tag:
     description: 'Image tag to deploy'
     required: true
@@ -39,7 +36,6 @@ runs:
         K8S_CHANGED="${{ inputs.k8s_changed }}"
         CF_CHANGED="${{ inputs.cf_changed }}"
         CONFIG_CHANGED_NON_PROD="${{ inputs.config_changed_non_prod }}"
-        CONFIG_CHANGED_PROD="${{ inputs.config_changed_prod }}"
         TAG="${{ inputs.tag }}"
 
         # Find deploy workflow — use override if provided, otherwise auto-detect
@@ -68,13 +64,11 @@ runs:
         echo "K8s changed: $K8S_CHANGED"
         echo "CF changed: $CF_CHANGED"
         echo "Config changed (non-prod): $CONFIG_CHANGED_NON_PROD"
-        echo "Config changed (prod): $CONFIG_CHANGED_PROD"
         echo "Tag: $TAG"
         echo ""
 
         # Track what we're triggering
         TRIGGERED_NON_PROD=""
-        TRIGGERED_PROD=""
 
         if [[ "$BUILD_CHANGED" == "true" ]]; then
           # App code changed - deploy new image, only include CF if it changed
@@ -118,10 +112,5 @@ runs:
           echo "Non-prod: $TRIGGERED_NON_PROD"
         else
           echo "Non-prod: no deploy triggered"
-        fi
-        if [[ -n "$TRIGGERED_PROD" ]]; then
-          echo "Prod: $TRIGGERED_PROD"
-        else
-          echo "Prod: no deploy triggered"
         fi
         echo "==============="
